@@ -1,51 +1,69 @@
 const express = require("express");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const connectDB = require("./config/database");
+const auth = require("./middlewares/auth");
 const UserModel = require("./models/User");
 
 const app = express();
 
 app.use(express.json());
+app.use(cookieParser());
 
-app.post("/signup", (req, res) => {
-  const user = new UserModel(req.body);
-  user.save();
-  res.status(200).send("User signed up successfully");
+const SECRET_KEY = "qwwertyuiop";
+
+app.post("/signup", async (req, res) => {
+  try {
+    const encryptedPassword = await bcrypt.hash(req.body.password, 10);
+    const reqObj = {
+      ...req.body,
+      password: encryptedPassword,
+    };
+    const user = new UserModel(reqObj);
+    await user.save();
+    res.status(200).send("User signed up successfully");
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      res.status(400).send(err);
+    } else {
+      res.status(500).send(err.message);
+    }
+  }
 });
 
-app.get("/users", async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
-    const usersList = await UserModel.find({ ...req.query });
-    if (usersList.length === 0) {
-      res.status(404).send("No users found");
+    const { emailId, password } = req.body;
+    const user = await UserModel.findOne({ emailId });
+    const isValidPassword = await user.validatePassword(password);
+    if (isValidPassword) {
+      const token = await userJWT();
+
+      res.cookie("token", token, {
+        httpOnly: true,
+        expires: new Date(Date.now() + 8 * 3600000),
+      });
+      res.send("Login Successful");
     } else {
-      res.status(200).send(usersList);
+      res.status(401).send("Invalid credentials");
     }
   } catch (err) {
-    res.send("Something went wrong");
+    res.status(500).send("Something went wrong");
   }
 });
 
-app.delete("/users", async (req, res) => {
+app.get("/profile", auth, async (req, res) => {
   try {
-    const userId = req.body.id;
-    await UserModel.findByIdAndDelete(userId);
-    res.send("User deleted successfully");
+    res.send(req.user);
   } catch (err) {
-    res.send("Something went wrong");
+    res.status(500).send("Something went wrong");
   }
 });
 
-app.patch("/users", async (req, res) => {
-  try {
-    const data = req.body;
-    // await UserModel.findByIdAndUpdate(data.id, data);
-    await UserModel.findOneAndUpdate({ emailId: data.emailId }, data);
-    res.send("User updated successfully");
-  } catch (err) {
-    res.send("Something went wrong");
-  }
+app.post("/sendConnectionRequest", auth, async (req, res) => {
+  const user = req.user;
 });
-
 connectDB()
   .then(() => {
     console.log("DB connection established");
