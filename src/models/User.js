@@ -1,11 +1,13 @@
 const mongoose = require("mongoose");
 const validator = require("validator");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const SECRET_KEY = "qwwertyuiop";
 
 const userSchema = new mongoose.Schema({
   firstName: {
     type: String,
-    minlength: 6,
+    // minlength: 6,
     maxlength: 20,
     required: true,
   },
